@@ -1,0 +1,9 @@
+# 환경 변수 (API 키 등 비밀 정보)
+.env
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+
+# macOS 시스템 파일
+.DS_Store
