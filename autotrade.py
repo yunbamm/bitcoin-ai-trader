@@ -84,6 +84,9 @@ class CryptoDataCollector:
             daily_data['MA5'] = daily_data['close'].rolling(window=5).mean()
             daily_data['MA20'] = daily_data['close'].rolling(window=20).mean()
 
+            hourly_data['MA5'] = hourly_data['close'].rolling(window=5).mean()
+            hourly_data['MA20'] = hourly_data['close'].rolling(window=20).mean()
+
             # DataFrame을 dict로 변환시 datetiem index 처리
             daily_data_dict = []
             for index, row in daily_data.iterrows():
@@ -109,7 +112,7 @@ class CryptoDataCollector:
 
 def ai_trading():
     try:
-        collector = CryptoDataCollector("KRW-BTC")
+        collector = CryptoDataCollector("KRW-BTC")  # 원하는 암호화폐 티커로 초기화 (예: "KRW-BTC")
 
         # 1. 현재 투자 상태 조회
         current_status = collector.get_current_status()
@@ -124,7 +127,9 @@ def ai_trading():
 
         # 3. 차트 데이터 수집
         ohlcv_data = collector.get_ohlcv_data()
-
+        print("\n=== OHLCV Data ===")
+        print(json.dumps(ohlcv_data["daily_data"][-2:], indent=2))
+        print(json.dumps(ohlcv_data["hourly_data"][-2:], indent=2))
 
         #4. OpenAI에게 데이터 제공
         from openai import OpenAI
