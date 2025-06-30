@@ -72,3 +72,6 @@ elif result["decision"] == "sell":
 else:
     print("hold 합니다.")
     # 여기에 매도/매수 하지 않는 로직 추가
+
+
+
