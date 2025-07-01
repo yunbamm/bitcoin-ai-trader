@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from openai import OpenAI
 import time
 import codecs
+import requests
 
 load_dotenv()
 
@@ -18,6 +19,55 @@ class EnhancedCryptoDataCollector:
         self.secret = os.getenv("UPBIT_SECRET_KEY")
         self.upbit = pyupbit.Upbit(self.access, self.secret)
         self.client = OpenAI()
+        self.fear_greed_api = "https://api.alternative.me/fng/"
+    
+    """공포탐욕지수 데이터 조회"""
+    def get_fear_greed_index(self, limit=7):
+        try:
+            response = requests.get(f"{self.fear_greed_api}?limit={limit}")
+            if response.status_code == 200:
+                data = response.json()
+                
+                # 최신 공포탐욕지수 출력
+                latest = data['data'][0]
+                print("\n=== Fear & Greed Index ===")
+                print(f"Current Value : {latest['value']} ({latest['value_classification']})")
+    
+
+                # 7일간의 데이터 가공
+                processed_data = []
+                for item in data['data']:
+                    processed_data.append({
+                        "date": datetime.fromtimestamp(int(item['timestamp'])).strftime("%Y-%m-%d"),
+                        "value": int(item["value"]),
+                        "classification": item["value_classification"]
+                    })
+                
+                print("\n=== Fear & Greed Index History ===")
+                print (f"processed_data: {processed_data}")
+
+                # 추세 분석
+                values = [int(item["value"]) for item in data['data']]
+                avg_value = sum(values) / len(values)
+                treand = "Improving" if values[0] > avg_value else "Deteriorating"
+
+                print("\n=== Fear & Greed Index AVG ===")
+                print(f"Avg: {avg_value:.2f}")   
+
+                return {
+                    "current" : {
+                        "value" : int(latest["value"]),
+                        "classification" : latest["value_classification"]
+                    },
+                    "history": processed_data,
+                    "trend": treand,
+                    "average": avg_value
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting fear & greed index: {e}")
+            return None
+
 
     """기술적 분석 지표 추가"""
     def add_technical_indicators(self, df):
@@ -192,7 +242,8 @@ class EnhancedCryptoDataCollector:
                     "ask_prices": analysis_data["orderbook_data"]["ask_prices"][:3],  # 상위 3개 호가만 사용
                     "bid_prices": analysis_data["orderbook_data"]["bid_prices"][:3],  # 상위 3개 호가만 사용
                 },
-                "ohlcv_data": analysis_data["ohlcv"]
+                "ohlcv_data": analysis_data["ohlcv"],
+                "fear_greed" : analysis_data["fear_greed"]
             }
 
             
@@ -203,6 +254,12 @@ class EnhancedCryptoDataCollector:
                         2. 기술적 지표 (RSI, MACD, 볼린저밴드..)
                         3. 호가창 정보 (매수/매도 세력...)
                         4. 시장 심리 및 위험도...
+
+                        Please consider the fiolloing key points:
+                        - Fear & greed Index below 20 (Extreme Fear) may present buying opportunitiese.
+                        - Fear & Greed Index above 80 (Extreme Greed) may present selling opportunities.
+                        - The trend of the Fear & Greeed Index is also a crucial inidicator.
+
                         응답은 반드시 아래 JSON 형식으로만 제공하고, 모든 텍스트는 한글로 작성해주세요:
                         {
                             "decision": "buy/sell/hold",
@@ -258,7 +315,7 @@ class EnhancedCryptoDataCollector:
             print(f"Error in get_ai_analysis: {e}")
             return None
     
-    def execute_trade(self, decision, confidence_score):
+    def execute_trade(self, decision, confidence_score, feat_greed_value):
         """AI 결정에 따라 거래 실행"""
         try:
             if decision == "buy":
@@ -293,27 +350,31 @@ def ai_trading():
         # 3. 차트 데이터 수집
         ohlcv_data = trader.get_ohlcv_data()
 
-        #4. AI 분석을 위한 데이터 준비
+        #4. 공포 탐욕지수 데이터 조회
+        fear_greed_data = trader.get_fear_greed_index()
+
+        #5. AI 분석을 위한 데이터 준비
         if all([current_status, orderbook_data, ohlcv_data]):
             analysis_data = {
                 "current_status": current_status,
                 "orderbook_data": orderbook_data,
-                "ohlcv": ohlcv_data
+                "ohlcv": ohlcv_data,
+                "fear_greed": fear_greed_data
             }
 
-            #5. AI 분석 실행
+            #6. AI 분석 실행
             ai_result = trader.get_ai_analysis(analysis_data)
             if ai_result:
                 print("\n=== AI Analysis Result ===")
                 print(json.dumps(ai_result, indent=2))
 
-                # 6. 매매 실행
-                trader.execute_trade(ai_result["decision"], ai_result["confidence_score"])
+                # 7. 매매 실행
+                trader.execute_trade(ai_result["decision"], ai_result["confidence_score"], fear_greed_data["current"]["value"])
     except Exception as e:
         print(f"Error in ai_trading: {e}")
             
 if __name__ == "__main__":
-    print("Starting Enhancesd Bitcoin Trading Bot...")
+    print("Starting Enhancesd Bitcoin Trading Bot with Fear & Greed Index...")
     print("Press Ctrl+C to stop")
 
     try:
