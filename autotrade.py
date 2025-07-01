@@ -17,10 +17,53 @@ class EnhancedCryptoDataCollector:
         self.ticker = ticker
         self.access = os.getenv("UPBIT_ACCESS_KEY")
         self.secret = os.getenv("UPBIT_SECRET_KEY")
+        self.serpapi_key = os.getenv("SERPAPI_KEY")
         self.upbit = pyupbit.Upbit(self.access, self.secret)
         self.client = OpenAI()
         self.fear_greed_api = "https://api.alternative.me/fng/"
     
+    """비트코인 관련 최신 뉴스 조회"""
+    def get_crypto_news(self):
+        try:
+            base_url = "https://serpapi.com/search.json"
+            params = {
+                "engine" : "google_news",
+                "q" : "bitcoin crypto trading",
+                "api_key" : self.serpapi_key,
+                "gl" : "us",  # 미국 뉴스
+                "hl" : "en",  # 영어 뉴스
+            }
+
+            response = requests.get(base_url, params=params)
+            if response.status_code == 200:
+                news_data = response.json()
+
+                if "news_results" not in news_data:
+                    return None
+                
+                processed_news = []
+                for news in news_data["news_results"][:5]:  # 최신 뉴스 5개만 가져오기
+                    processed_news.append({
+                        "title": news.get("title", ""),
+                        "link": news.get("link", ""),
+                        "source": news.get("source", {}).get("name", ""),
+                        "date": news.get("date", ""),
+                        "snippet": news.get("snippet", "")
+                    })
+
+                print("\n=== Latest Crypto News ===")
+                for news in processed_news:
+                    print(f"Title: {news['title']}")
+                    print(f"Source: {news['source']}")
+                    print(f"Date: {news['date']}")
+
+                return processed_news
+            return None
+        except Exception as e:
+            print(f"Error getting crypto news: {e}")
+            return None
+
+
     """공포탐욕지수 데이터 조회"""
     def get_fear_greed_index(self, limit=7):
         try:
@@ -251,9 +294,10 @@ class EnhancedCryptoDataCollector:
             promt = """당신은 비트코인 투자 전문가입니다. 제공된 데이터를 분석하여 매매 결정을 내려주세요. :
                         분석 기준:
                         1. 현재 보유 현황 (현금/코인 보유량...)
-                        2. 기술적 지표 (RSI, MACD, 볼린저밴드..)
+                        2. 차트 / 기술적 지표 (RSI, MACD, 볼린저밴드..)
                         3. 호가창 정보 (매수/매도 세력...)
-                        4. 시장 심리 및 위험도...
+                        4. 공포 탐욕 지수 (Fear & Greed Index)
+                        5. 비트코인 관련 최신 뉴스
 
                         Please consider the fiolloing key points:
                         - Fear & greed Index below 20 (Extreme Fear) may present buying opportunitiese.
@@ -353,7 +397,10 @@ def ai_trading():
         #4. 공포 탐욕지수 데이터 조회
         fear_greed_data = trader.get_fear_greed_index()
 
-        #5. AI 분석을 위한 데이터 준비
+        #5 비트코인 관련 최신 뉴스 조회
+        news_data = trader.get_crypto_news()
+
+        #6. AI 분석을 위한 데이터 준비
         if all([current_status, orderbook_data, ohlcv_data]):
             analysis_data = {
                 "current_status": current_status,
@@ -362,13 +409,13 @@ def ai_trading():
                 "fear_greed": fear_greed_data
             }
 
-            #6. AI 분석 실행
+            #7. AI 분석 실행
             ai_result = trader.get_ai_analysis(analysis_data)
             if ai_result:
                 print("\n=== AI Analysis Result ===")
                 print(json.dumps(ai_result, indent=2))
 
-                # 7. 매매 실행
+                # 8. 매매 실행
                 trader.execute_trade(ai_result["decision"], ai_result["confidence_score"], fear_greed_data["current"]["value"])
     except Exception as e:
         print(f"Error in ai_trading: {e}")
